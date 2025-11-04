@@ -19,5 +19,9 @@ def add_tile():
     current_player = 2 if current_player == 1 else 1  # Switch to the other player
     return jsonify(color=color)
 
+@app.route('/player-moved')
+def player_moved():
+    pass
+
 if __name__ == "__main__":
     app.run(debug=True)

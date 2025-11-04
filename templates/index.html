@@ -36,6 +36,11 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(function () {
+    const min = 1;
+    const max = 6;
+    function rollDice() {
+        console.log(Math.floor(Math.random() * (max - min +1)) + min)
+    }
   const rows = 10;
   const cols = 10;
   const ringThickness = 1; // set to 2 for a thicker border
@@ -56,6 +61,14 @@ $(function () {
       $('#board').append($tile);
     }
   }
+
+    var dice = document.createElement("button");
+
+    // 2. Set the text content of the button
+    dice.textContent = "Roll Dice!";
+    dice.id = "dice-btn";
+    dice.addEventListener("click", rollDice);
+    document.body.appendChild(dice);
 
   // Clicks only on edge tiles
   $('#board').on('click', '.hex.edge', function () {
