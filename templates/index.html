@@ -39,7 +39,11 @@ $(function () {
     const min = 1;
     const max = 6;
     function rollDice() {
-        console.log(Math.floor(Math.random() * (max - min +1)) + min)
+        var roll_result = Math.floor(Math.random() * (max - min +1)) + min
+        console.log(roll_result)
+        fetch("http://localhost:5000/player-moved?result="+roll_result, {
+            method: "GET"
+        })
     }
   const rows = 10;
   const cols = 10;
