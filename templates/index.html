@@ -14,19 +14,55 @@
     grid-template-columns: repeat(10, 60px);
     grid-template-rows: repeat(10, 52px);
     gap:2px;
+    position: relative;
   }
   .hex {
+    position: relative;            /* allow centering tokens inside */
     width:60px; height:52px;
     background: lightgray;
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     transition: background-color .2s;
   }
-  /* Center tiles become placeholders: invisible and non-clickable */
   .empty {
     background: transparent !important;
-    pointer-events: none;       /* don’t react to clicks */
-    /* keep size so the grid/ring stays aligned */
+    pointer-events: none;
   }
+
+  /* --- player tokens --- */
+  .token {
+    position:absolute;
+    width:28px; height:28px;       /* token size */
+    top:50%; left:50%;
+    transform: translate(-50%, -50%);   /* center in hex */
+    pointer-events: none;               /* clicks go to hex */
+  }
+  /* Tiny offsets so two tokens don’t perfectly overlap */
+  .token.p1 { transform: translate(-65%, -60%); }
+  .token.p2 { transform: translate(-35%, -40%); }
+
+  .token .icon {
+    width:100%; height:100%;
+    display:block;
+    color: currentColor;   /* SVG fills from color */
+    fill: currentColor;
+  }
+
+  /* Colors for players */
+  .star  { color: gold; }
+  .heart { color: orange; }
+
+  /* Glow to show active turn */
+  .active {
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.25)) drop-shadow(0 0 10px currentColor);
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: translate(var(--tx,-50%), var(--ty,-50%)) scale(1.0); }
+    to   { transform: translate(var(--tx,-50%), var(--ty,-50%)) scale(1.1); }
+  }
+
+  /* Keep the dice button near the board */
+  #dice-btn { margin-left: 12px; height: 32px; align-self: flex-start; }
 </style>
 </head>
 <body>
@@ -36,14 +72,9 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(function () {
-    const min = 1;
-    const max = 6;
-    function rollDice() {
-        console.log(Math.floor(Math.random() * (max - min +1)) + min)
-    }
   const rows = 10;
   const cols = 10;
-  const ringThickness = 1; // set to 2 for a thicker border
+  const ringThickness = 1;
 
   // Build the board with only the perimeter "active"
   for (let r = 0; r < rows; r++) {
@@ -55,22 +86,63 @@ $(function () {
       const $tile = $('<div class="hex"></div>');
       $tile.data({ clicked: false, r, c });
 
-      if (!isEdge) $tile.addClass('empty');      // center: invisible placeholders
-      if (isEdge)  $tile.addClass('edge');       // edge: interactive
+      if (!isEdge) $tile.addClass('empty');
+      if (isEdge)  $tile.addClass('edge');
 
       $('#board').append($tile);
     }
   }
 
-    var dice = document.createElement("button");
+  // --- PLAYER TOKENS ---
+  // Find a starting hex: first edge tile (top-left corner of the ring)
+  const $start = $('#board .hex.edge').first();
 
-    // 2. Set the text content of the button
-    dice.textContent = "Roll Dice!";
-    dice.id = "dice-btn";
-    dice.addEventListener("click", rollDice);
-    document.body.appendChild(dice);
+  // SVGs for star/heart
+  const starSVG  =
+    '<svg viewBox="0 0 100 100" class="icon"><polygon points="50,6 61,38 95,38 67,58 78,92 50,72 22,92 33,58 5,38 39,38"/></svg>';
+  const heartSVG =
+    '<svg viewBox="0 0 100 100" class="icon"><path d="M50 86 L20 56 C6 42 14 20 34 22 c7 1 13 6 16 12 c3-6 9-11 16-12 c20-2 28 20 14 34 Z"/></svg>';
 
-  // Clicks only on edge tiles
+  // Create tokens
+  const $p1 = $('<div id="p1" class="token star p1"></div>').html(starSVG);
+  const $p2 = $('<div id="p2" class="token heart p2"></div>').html(heartSVG);
+
+  // Set custom CSS vars to keep pulse centered after our offsets
+  $p1[0].style.setProperty('--tx','-65%'); $p1[0].style.setProperty('--ty','-60%');
+  $p2[0].style.setProperty('--tx','-35%'); $p2[0].style.setProperty('--ty','-40%');
+
+  // Place both tokens on the starting hex
+  $start.append($p1);
+  $start.append($p2);
+
+  // Who's turn?
+  let currentPlayer = 1;
+  setActivePlayer(currentPlayer);
+
+  function setActivePlayer(player) {
+    $('#p1, #p2').removeClass('active');
+    if (player === 1) { $('#p1').addClass('active'); }
+    else              { $('#p2').addClass('active'); }
+  }
+
+  // --- DICE BUTTON ---
+  const min = 1, max = 6;
+  function rollDice() {
+    const roll = Math.floor(Math.random() * (max - min + 1)) + min;
+    console.log('Rolled:', roll);
+    // TODO: move the active player's token by `roll` tiles along the ring
+    // For now, just switch turn so you can see the glow toggle:
+    currentPlayer = (currentPlayer === 1) ? 2 : 1;
+    setActivePlayer(currentPlayer);
+  }
+
+  const dice = document.createElement("button");
+  dice.textContent = "Roll Dice!";
+  dice.id = "dice-btn";
+  dice.addEventListener("click", rollDice);
+  document.body.appendChild(dice);
+
+  // Existing click coloring (still works on ring tiles)
   $('#board').on('click', '.hex.edge', function () {
     if (!$(this).data('clicked')) {
       $.getJSON('/add_tile', (data) => {
@@ -79,6 +151,12 @@ $(function () {
       });
     }
   });
+
+  /* --- Optional next step: moving tokens ---
+     When you're ready, keep an array of the ring tiles in order, track
+     each player's index, and on roll: move the token DOM node to the
+     new tile via .append(). Ping me and I’ll wire that up.
+  */
 });
 </script>
 
