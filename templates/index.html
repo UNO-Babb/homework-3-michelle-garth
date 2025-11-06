@@ -6,50 +6,135 @@
 <title>Hexagon Tile Game</title>
 <style>
   body {
-    display:flex; justify-content:center; align-items:center;
+    display:flex; justify-content:center; align-items:flex-start;
     height:100vh; margin:0; font-family:Arial, sans-serif; background:#f0f0f0;
+    gap: 14px; padding: 12px;
   }
   #board {
     display:grid;
     grid-template-columns: repeat(10, 60px);
     grid-template-rows: repeat(10, 52px);
     gap:2px;
+    position: relative;
   }
   .hex {
+    position: relative;
     width:60px; height:52px;
-    background: lightgray;
+    background: #dcdcdc; /* default gray */
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     transition: background-color .2s;
   }
-  /* Center tiles become placeholders: invisible and non-clickable */
   .empty {
     background: transparent !important;
-    pointer-events: none;       /* don’t react to clicks */
-    /* keep size so the grid/ring stays aligned */
+    pointer-events: none;
   }
+
+  /* periodic bonus tile colors */
+  .pink  { background:#ffc3e1 !important; }  /* +2 */
+  .green { background:#c6f0c2 !important; }  /* +3 */
+  .blue  { background:#c9d9ff !important; }  /* +4 */
+
+  /* --- player tokens --- */
+  .token {
+    position:absolute;
+    width:28px; height:28px;
+    top:50%; left:50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  /* slight separation so they don't overlap */
+  .token.p1 { transform: translate(-65%, -60%); }
+  .token.p2 { transform: translate(-35%, -40%); }
+
+  .token .icon {
+    width:100%; height:100%;
+    display:block;
+    color: currentColor;
+    fill: currentColor;
+  }
+
+  /* token colors */
+  .star  { color: gold; }
+  .heart { color: orange; }
+
+  /* active player's glow */
+  .active {
+    filter: drop-shadow(0 0 6px rgba(0,0,0,0.25)) drop-shadow(0 0 10px currentColor);
+    animation: pulse 1s ease-in-out infinite alternate;
+  }
+  @keyframes pulse {
+    from { transform: translate(var(--tx,-50%), var(--ty,-50%)) scale(1.0); }
+    to   { transform: translate(var(--tx,-50%), var(--ty,-50%)) scale(1.1); }
+  }
+
+  /* right panel */
+  .panel { min-width: 220px; display:flex; flex-direction:column; gap:10px; }
+  #dice-btn { height: 32px; align-self: flex-start; }
+  #roll-out { font-family: monospace; margin-top: 6px; }
+
+  .card {
+    background:#fff; border-radius:10px; padding:10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  }
+  .card h3 { margin:0 0 6px 0; font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
+  .scoregrid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  .badge { width:14px; height:14px; border-radius:50%; display:inline-block; }
+  .badge.p1 { background:gold; }
+  .badge.p2 { background:orange; }
+  .big { font-size:22px; font-weight:800; }
+  .legend { display:flex; gap:8px; flex-wrap:wrap; font-size:12px; }
+  .legend span { display:flex; align-items:center; gap:6px; }
+  .swatch { width:18px; height:12px; border-radius:3px; display:inline-block; }
+  .done { color:#0a7a0a; font-weight:700; }
+  .dim { opacity:.66; }
 </style>
 </head>
 <body>
 
 <div id="board"></div>
 
+<div class="panel">
+  <button id="dice-btn">Roll Dice!</button>
+  <div id="roll-out" class="dim">Ready — Player 1 to roll.</div>
+
+  <div class="scoregrid">
+    <div class="card">
+      <h3><span class="badge p1"></span> Player 1</h3>
+      <div>Score: <span id="p1-score" class="big">0</span></div>
+      <div>Steps: <span id="p1-steps">0</span>/<span id="total-steps">—</span></div>
+      <div>Status: <span id="p1-status">Racing</span></div>
+    </div>
+    <div class="card">
+      <h3><span class="badge p2"></span> Player 2</h3>
+      <div>Score: <span id="p2-score" class="big">0</span></div>
+      <div>Steps: <span id="p2-steps">0</span>/<span id="total-steps">—</span></div>
+      <div>Status: <span id="p2-status">Racing</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Legend</h3>
+    <div class="legend">
+      <span><i class="swatch" style="background:#ffc3e1;"></i> Pink = +2</span>
+      <span><i class="swatch" style="background:#c6f0c2;"></i> Green = +3</span>
+      <span><i class="swatch" style="background:#c9d9ff;"></i> Blue = +4</span>
+      <span><i class="swatch" style="background:#dcdcdc;"></i> Gray = +0</span>
+    </div>
+  </div>
+
+  <div id="final" class="card" style="display:none;">
+    <h3>Final</h3>
+    <div id="final-text"></div>
+  </div>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(function () {
-    const min = 1;
-    const max = 6;
-    function rollDice() {
-        var roll_result = Math.floor(Math.random() * (max - min +1)) + min
-        console.log(roll_result)
-        fetch("http://localhost:5000/player-moved?result="+roll_result, {
-            method: "GET"
-        })
-    }
-  const rows = 10;
-  const cols = 10;
-  const ringThickness = 1; // set to 2 for a thicker border
+  const rows = 10, cols = 10, ringThickness = 1;
 
-  // Build the board with only the perimeter "active"
+  // === Board build ===
+  const board = Array.from({length: rows}, () => Array(cols).fill(null));
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const isEdge =
@@ -57,30 +142,164 @@ $(function () {
         c < ringThickness || c >= cols - ringThickness;
 
       const $tile = $('<div class="hex"></div>');
-      $tile.data({ clicked: false, r, c });
+      // store points/color per tile; default 0
+      $tile.data({ clicked: false, r, c, points: 0, colorClass: null });
 
-      if (!isEdge) $tile.addClass('empty');      // center: invisible placeholders
-      if (isEdge)  $tile.addClass('edge');       // edge: interactive
+      if (!isEdge) $tile.addClass('empty'); else $tile.addClass('edge');
 
+      board[r][c] = $tile;
       $('#board').append($tile);
     }
   }
 
-    var dice = document.createElement("button");
+  // Build clockwise path around ring
+  const ring = [];
+  for (let c = 0; c < cols; c++) ring.push(board[0][c]);
+  for (let r = 1; r < rows-1; r++) ring.push(board[r][cols-1]);
+  for (let c = cols-1; c >= 0; c--) ring.push(board[rows-1][c]);
+  for (let r = rows-2; r >= 1; r--) ring.push(board[r][0]);
 
-    // 2. Set the text content of the button
-    dice.textContent = "Roll Dice!";
-    dice.id = "dice-btn";
-    dice.addEventListener("click", rollDice);
-    document.body.appendChild(dice);
+  // Periodic bonus tiles: every 4th tile cycles pink/green/blue
+  const colors = [
+    {cls:'pink',  pts:2},
+    {cls:'green', pts:3},
+    {cls:'blue',  pts:4},
+  ];
+  for (let i = 0; i < ring.length; i++) {
+    if (i % 2 === 0) {
+      const pick = colors[(Math.floor(i/2)) % colors.length];
+      ring[i].addClass(pick.cls);
+      ring[i].data('points', pick.pts);
+      ring[i].data('colorClass', pick.cls);
+    }
+  }
 
-  // Clicks only on edge tiles
+  // Show total steps on the scoreboard
+  $('#total-steps').text(ring.length);
+
+  // --- PLAYER TOKENS ---
+  const starSVG  = '<svg viewBox="0 0 100 100" class="icon"><polygon points="50,6 61,38 95,38 67,58 78,92 50,72 22,92 33,58 5,38 39,38"/></svg>';
+  const heartSVG = '<svg viewBox="0 0 100 100" class="icon"><path d="M50 86 L20 56 C6 42 14 20 34 22 c7 1 13 6 16 12 c3-6 9-11 16-12 c20-2 28 20 14 34 Z"/></svg>';
+
+  const $p1 = $('<div id="p1" class="token star p1"></div>').html(starSVG);
+  const $p2 = $('<div id="p2" class="token heart p2"></div>').html(heartSVG);
+  // keep pulse centered after offsets
+  $p1[0].style.setProperty('--tx','-65%'); $p1[0].style.setProperty('--ty','-60%');
+  $p2[0].style.setProperty('--tx','-35%'); $p2[0].style.setProperty('--ty','-40%');
+
+  // Start both at ring[0]
+  ring[0].append($p1[0]);
+  ring[0].append($p2[0]);
+
+  // Positions & stats
+  const pos   = { 1: 0, 2: 0 }; // index in ring
+  const steps = { 1: 0, 2: 0 }; // steps taken
+  const score = { 1: 0, 2: 0 }; // points
+  const done  = { 1: false, 2: false }; // lap complete?
+  let currentPlayer = 1;
+
+  setActivePlayer(currentPlayer);
+  updateScoreboard();
+
+  function setActivePlayer(p) {
+    $('#p1,#p2').removeClass('active');
+    (p === 1 ? $('#p1') : $('#p2')).addClass('active');
+    $('#roll-out').text(`Player ${p} to roll…`);
+  }
+
+  function updateScoreboard() {
+    $('#p1-score').text(score[1]);
+    $('#p2-score').text(score[2]);
+    $('#p1-steps').text(steps[1]);
+    $('#p2-steps').text(steps[2]);
+    $('#p1-status').html(done[1] ? '<span class="done">Finished</span>' : 'Racing');
+    $('#p2-status').html(done[2] ? '<span class="done">Finished</span>' : 'Racing');
+  }
+
+  // ---- Movement (with step counting) ----
+  const hopMs = 150;                     // hop speed
+  const END_WHEN_FIRST_LAPS = false;     // set true to end when first player finishes
+
+  function moveBy(player, count, cb) {
+    const token = (player === 1) ? $('#p1')[0] : $('#p2')[0];
+
+    function stepOnce(rem) {
+      if (rem <= 0) { cb && cb(); return; }
+      pos[player] = (pos[player] + 1) % ring.length;
+      ring[pos[player]].append(token);
+      steps[player] += 1;               // track total steps for lap
+      setTimeout(() => stepOnce(rem - 1), hopMs);
+    }
+    stepOnce(count);
+  }
+
+  function awardLandingPoints(player) {
+    const tile = ring[pos[player]];
+    const pts = tile.data('points') || 0;
+    score[player] += pts;
+    updateScoreboard();
+    return pts;
+  }
+
+  function checkLap(player) {
+    if (!done[player] && steps[player] >= ring.length) {
+      done[player] = true;
+      updateScoreboard();
+    }
+    if ((END_WHEN_FIRST_LAPS && (done[1] || done[2])) ||
+        (!END_WHEN_FIRST_LAPS && done[1] && done[2])) {
+      endGame();
+      return true;
+    }
+    return false;
+  }
+
+  function endGame() {
+    $('#dice-btn').prop('disabled', true);
+    const text = `Game Over — Scores: P1=${score[1]}  P2=${score[2]}`
+               + (score[1] === score[2] ? '  (Tie!)'
+                 : (score[1] > score[2] ? '  — Player 1 wins!' : '  — Player 2 wins!'));
+    $('#final-text').text(text);
+    $('#final').show();
+    $('#roll-out').text(text);
+  }
+
+  // --- Dice ---
+  const $btn = $('#dice-btn');
+  const min = 1, max = 6;
+
+  function rollDice() {
+    if ($btn.prop('disabled')) return;
+    // if active player already finished, auto-skip to the other
+    if (done[currentPlayer]) {
+      currentPlayer = (currentPlayer === 1) ? 2 : 1;
+      if (done[currentPlayer]) { endGame(); return; }
+    }
+
+    $btn.prop('disabled', true);
+    const roll = Math.floor(Math.random() * (max - min + 1)) + min;
+    $('#roll-out').text(`Rolled ${roll} — Player ${currentPlayer}`);
+
+    moveBy(currentPlayer, roll, () => {
+      const gained = awardLandingPoints(currentPlayer);
+      $('#roll-out').text(
+        `Player ${currentPlayer} landed on ${gained ? '+'+gained : '+0'} points.`
+      );
+      if (!checkLap(currentPlayer)) {
+        currentPlayer = (currentPlayer === 1) ? 2 : 1; // next turn
+        setActivePlayer(currentPlayer);
+        $btn.prop('disabled', false);
+      }
+    });
+  }
+  $('#dice-btn').on('click', rollDice);
+
+  // keep your Flask coloring hook if needed later
   $('#board').on('click', '.hex.edge', function () {
     if (!$(this).data('clicked')) {
-      $.getJSON('/add_tile', (data) => {
-        $(this).css('background-color', data.color);
-        $(this).data('clicked', true);
-      });
+      // Example placeholder:
+      // $.getJSON('/add_tile', (data) => { $(this).css('background-color', data.color); });
+      $(this).data('clicked', true);
     }
   });
 });
@@ -88,3 +307,4 @@ $(function () {
 
 </body>
 </html>
+
