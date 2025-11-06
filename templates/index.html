@@ -205,7 +205,7 @@ $(function () {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify({positions: JSON.stringify(pos), scores: JSON.stringify(score)})
+      body: JSON.stringify({positions: pos, scores: score, turn: currentPlayer})
     })
   }
 
