@@ -21,25 +21,11 @@ def add_tile():
     current_player = 2 if current_player == 1 else 1  # Switch to the other player
     return jsonify(color=color)
 
-@app.route('/player-moved')
+@app.route('/update-events', methods=["POST"])
 def player_moved():
-    rollresult = int(request.args.get('result'))
-    global current_player
-    global player2_pos
-    global player1_pos
-    
-    if current_player == 1:
-        color = 'green'
-        player1_pos += rollresult 
-        current_player = 2 if current_player == 1 else 1
-        return jsonify({"move_to": player1_pos, "player": 1})
-    else:
-        color ='blue'  # Alternate between green and blue
-        player2_pos += rollresult
-        current_player = 2 if current_player == 1 else 1
-        return jsonify({"move_to": player2_pos, "player": 2})
-      # Switch to the other player
-    
+    if request.method == "POST":
+        print(request.get_data())
+    return "success"
 
 if __name__ == "__main__":
     app.run(debug=True)
