@@ -101,13 +101,11 @@
     <div class="card">
       <h3><span class="badge p1"></span> Player 1</h3>
       <div>Score: <span id="p1-score" class="big">0</span></div>
-      <div>Steps: <span id="p1-steps">0</span>/<span id="total-steps">—</span></div>
       <div>Status: <span id="p1-status">Racing</span></div>
     </div>
     <div class="card">
       <h3><span class="badge p2"></span> Player 2</h3>
       <div>Score: <span id="p2-score" class="big">0</span></div>
-      <div>Steps: <span id="p2-steps">0</span>/<span id="total-steps">—</span></div>
       <div>Status: <span id="p2-status">Racing</span></div>
     </div>
   </div>
@@ -201,6 +199,16 @@ $(function () {
   setActivePlayer(currentPlayer);
   updateScoreboard();
 
+  function updateEvents() {
+    fetch("http://localhost:5000/update-events", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({positions: pos, scores: score, turn: currentPlayer})
+    })
+  }
+
   function setActivePlayer(p) {
     $('#p1,#p2').removeClass('active');
     (p === 1 ? $('#p1') : $('#p2')).addClass('active');
@@ -291,6 +299,7 @@ $(function () {
         $btn.prop('disabled', false);
       }
     });
+    updateEvents();
   }
   $('#dice-btn').on('click', rollDice);
 
